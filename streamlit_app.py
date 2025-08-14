@@ -7,6 +7,8 @@ from plotly.subplots import make_subplots
 import warnings
 warnings.filterwarnings('ignore')
 
+# Removed AI API Configuration - App now works without external dependencies
+
 # Page configuration
 st.set_page_config(
     page_title="Data Analysis Dashboard",
@@ -402,63 +404,85 @@ def show_data_cleaning(df):
         remove_duplicates = st.checkbox("Remove duplicates", value=True)
     
     if st.button("🚀 Clean Data", type="primary"):
-        with st.spinner("🧹 Cleaning your data..."):
-            # Clean the data
-            cleaned_df = df.copy()
-            
-            # Remove duplicates
-            if remove_duplicates:
-                original_len = len(cleaned_df)
-                cleaned_df = cleaned_df.drop_duplicates()
-                duplicates_removed = original_len - len(cleaned_df)
-            
-            # Drop columns with too many missing values
-            threshold = missing_threshold / 100
-            columns_to_drop = []
-            for col in cleaned_df.columns:
-                if cleaned_df[col].isnull().sum() / len(cleaned_df) > threshold:
-                    columns_to_drop.append(col)
-            
-            if columns_to_drop:
-                cleaned_df = cleaned_df.drop(columns=columns_to_drop)
-            
-            # Fill missing values
-            for col in cleaned_df.columns:
-                if cleaned_df[col].dtype == 'object':
-                    cleaned_df[col] = cleaned_df[col].fillna('Unknown')
-                else:
-                    cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].median())
-            
-            # Store cleaned data
-            st.session_state['cleaned_df'] = cleaned_df
-            
-            # Show results with enhanced styling
-            st.success("✨ Data cleaned successfully!")
-            
-            # Enhanced metrics display
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Shape Change", f"{cleaned_df.shape[0]} × {cleaned_df.shape[1]}")
-            with col2:
-                st.metric("Columns Dropped", len(columns_to_drop))
-            with col3:
-                st.metric("Duplicates Removed", duplicates_removed if remove_duplicates else 0)
-            with col4:
-                missing_filled = df.isnull().sum().sum() - cleaned_df.isnull().sum().sum()
-                st.metric("Missing Values Filled", missing_filled)
-            
-            # Show cleaned data preview
-            st.subheader("👀 Cleaned Data Preview")
-            st.dataframe(cleaned_df.head(10))
-            
-            # Download cleaned data
-            csv_data = cleaned_df.to_csv(index=False)
-            st.download_button(
-                label="📥 Download Cleaned CSV",
-                data=csv_data,
-                file_name=f"cleaned_data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv"
-            )
+        try:
+            with st.spinner("🧹 Cleaning your data..."):
+                # Clean the data
+                cleaned_df = df.copy()
+                duplicates_removed = 0
+                columns_to_drop = []
+                
+                # Remove duplicates
+                if remove_duplicates:
+                    original_len = len(cleaned_df)
+                    cleaned_df = cleaned_df.drop_duplicates()
+                    duplicates_removed = original_len - len(cleaned_df)
+                
+                # Drop columns with too many missing values
+                threshold = missing_threshold / 100
+                for col in cleaned_df.columns:
+                    if cleaned_df[col].isnull().sum() / len(cleaned_df) > threshold:
+                        columns_to_drop.append(col)
+                
+                if columns_to_drop:
+                    cleaned_df = cleaned_df.drop(columns=columns_to_drop)
+                
+                # Fill missing values safely
+                for col in cleaned_df.columns:
+                    if cleaned_df[col].dtype == 'object':
+                        cleaned_df[col] = cleaned_df[col].fillna('Unknown')
+                    else:
+                        # Handle numeric columns safely
+                        try:
+                            median_val = cleaned_df[col].median()
+                            if pd.isna(median_val):
+                                cleaned_df[col] = cleaned_df[col].fillna(0)
+                            else:
+                                cleaned_df[col] = cleaned_df[col].fillna(median_val)
+                        except:
+                            cleaned_df[col] = cleaned_df[col].fillna(0)
+                
+                # Store cleaned data in session state
+                st.session_state['cleaned_df'] = cleaned_df
+                st.session_state['original_df'] = df  # Keep original for comparison
+                
+                # Show results with enhanced styling
+                st.success("✨ Data cleaned successfully!")
+                
+                # Enhanced metrics display
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Shape Change", f"{cleaned_df.shape[0]} × {cleaned_df.shape[1]}")
+                with col2:
+                    st.metric("Columns Dropped", len(columns_to_drop))
+                with col3:
+                    st.metric("Duplicates Removed", duplicates_removed)
+                with col4:
+                    missing_filled = df.isnull().sum().sum() - cleaned_df.isnull().sum().sum()
+                    st.metric("Missing Values Filled", missing_filled)
+                
+                # Show cleaned data preview
+                st.subheader("👀 Cleaned Data Preview")
+                st.dataframe(cleaned_df.head(10))
+                
+                # Download cleaned data
+                csv_data = cleaned_df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Cleaned CSV",
+                    data=csv_data,
+                    file_name=f"cleaned_data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
+                )
+                
+                # Add option to switch between original and cleaned data
+                st.subheader("🔄 Data View Options")
+                if st.button("📊 Switch to Cleaned Data View"):
+                    st.session_state['current_df'] = cleaned_df
+                    st.success("✅ Switched to cleaned data view!")
+                    st.rerun()
+                    
+        except Exception as e:
+            st.error(f"❌ Error during data cleaning: {str(e)}")
+            st.info("💡 Please try again or check your data format.")
 
 def show_visualizations(df):
     """Display data visualizations"""
@@ -573,6 +597,8 @@ def show_visualizations(df):
         
         st.plotly_chart(fig, use_container_width=True)
 
+# AI chatbot function removed - App now works without external API dependencies
+
 def main():
     """Main Streamlit application"""
     
@@ -623,29 +649,54 @@ def main():
             # Success message with animation
             st.success(f"🎉 Data loaded successfully! Shape: {df.shape[0]:,} rows × {df.shape[1]:,} columns")
             
+            # Data switching option
+            if 'cleaned_df' in st.session_state:
+                st.subheader("🔄 Data View Options")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("📊 View Original Data", type="secondary"):
+                        st.session_state['current_df'] = df
+                        st.success("✅ Switched to original data!")
+                        st.rerun()
+                with col2:
+                    if st.button("🧹 View Cleaned Data", type="secondary"):
+                        st.session_state['current_df'] = st.session_state['cleaned_df']
+                        st.success("✅ Switched to cleaned data!")
+                        st.rerun()
+                
+                # Show current data info
+                current_df = st.session_state.get('current_df', df)
+                if 'current_df' in st.session_state and st.session_state['current_df'] is not st.session_state.get('original_df', df):
+                    st.info(f"📊 Currently viewing: Cleaned Data (Shape: {current_df.shape[0]} × {current_df.shape[1]})")
+                else:
+                    st.info(f"📊 Currently viewing: Original Data (Shape: {df.shape[0]} × {df.shape[1]})")
+            
             # Create tabs with enhanced styling
             tab1, tab2, tab3, tab4 = st.tabs(["📋 Data Preview", "📊 Summary Analysis", "🧹 Data Cleaning", "📈 Visualizations"])
             
+            # Use current data (original or cleaned)
+            current_df = st.session_state.get('current_df', df)
+            
             with tab1:
                 st.header("📋 Data Preview")
-                st.dataframe(df.head(10))
+                st.dataframe(current_df.head(10))
                 
                 # Enhanced metrics display
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    st.metric("Rows", f"{df.shape[0]:,}")
+                    st.metric("Rows", f"{current_df.shape[0]:,}")
                 with col2:
-                    st.metric("Columns", f"{df.shape[1]:,}")
+                    st.metric("Columns", f"{current_df.shape[1]:,}")
                 with col3:
-                    missing_total = df.isnull().sum().sum()
+                    missing_total = current_df.isnull().sum().sum()
                     st.metric("Missing Values", f"{missing_total:,}")
                 with col4:
-                    duplicates = df.duplicated().sum()
+                    duplicates = current_df.duplicated().sum()
                     st.metric("Duplicates", f"{duplicates:,}")
                 
                 # Data types with enhanced styling
                 st.subheader("📊 Data Types")
-                dtype_info = df.dtypes.value_counts()
+                dtype_info = current_df.dtypes.value_counts()
                 for dtype, count in dtype_info.items():
                     st.markdown(f"""
                     <div class="metric-card" style="padding: 1rem; margin: 0.5rem 0;">
@@ -654,7 +705,7 @@ def main():
                     """, unsafe_allow_html=True)
                 
                 # Download option
-                csv_data = df.to_csv(index=False)
+                csv_data = current_df.to_csv(index=False)
                 st.download_button(
                     label="📥 Download CSV",
                     data=csv_data,
@@ -665,42 +716,49 @@ def main():
             with tab2:
                 st.header("📊 Summary Analysis")
                 
-                # Missing values breakdown with enhanced styling
+                # Missing values breakdown with enhanced styling and error handling
                 st.subheader("❓ Missing Values Analysis")
-                missing_data = df.isnull().sum()
-                missing_df = pd.DataFrame([
-                    {'Column': col, 'Missing_Count': count, 'Percentage': (count/len(df))*100}
-                    for col, count in missing_data.items() if count > 0
-                ]).sort_values('Missing_Count', ascending=False)
-                
-                if not missing_df.empty:
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.write("**Missing values by column:**")
-                        st.dataframe(missing_df)
-                    with col2:
-                        # Create bar chart with proper column names
-                        fig = px.bar(
-                            missing_df, 
-                            x='Column', 
-                            y='Missing_Count', 
-                            title="Missing Values by Column"
-                        )
-                        fig.update_layout(
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(color='white')
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.success("✅ No missing values found!")
+                try:
+                    missing_data = current_df.isnull().sum()
+                    if len(missing_data) > 0:
+                        missing_df = pd.DataFrame([
+                            {'Column': col, 'Missing_Count': int(count), 'Percentage': round((count/len(current_df))*100, 2)}
+                            for col, count in missing_data.items() if count > 0
+                        ])
+                        
+                        if not missing_df.empty:
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write("**Missing values by column:**")
+                                st.dataframe(missing_df)
+                            with col2:
+                                # Create bar chart with proper column names
+                                fig = px.bar(
+                                    missing_df, 
+                                    x='Column', 
+                                    y='Missing_Count', 
+                                    title="Missing Values by Column"
+                                )
+                                fig.update_layout(
+                                    plot_bgcolor='rgba(0,0,0,0)',
+                                    paper_bgcolor='rgba(0,0,0,0)',
+                                    font=dict(color='white')
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.success("✅ No missing values found!")
+                    else:
+                        st.success("✅ No missing values found!")
+                except Exception as e:
+                    st.warning(f"⚠️ Could not analyze missing values: {str(e)}")
+                    st.info("💡 This might happen after data cleaning. Try refreshing the page.")
                 
                 # Categorical analysis with enhanced styling
-                categorical_columns = df.select_dtypes(include=['object']).columns
+                categorical_columns = current_df.select_dtypes(include=['object']).columns
                 if len(categorical_columns) > 0:
                     st.subheader("🏷️ Categorical Analysis")
                     for col in categorical_columns[:3]:
-                        value_counts = df[col].value_counts().head(10)
+                        value_counts = current_df[col].value_counts().head(10)
                         st.markdown(f"""
                         <div class="metric-card">
                             <h4>📊 {col} (Top 10 values)</h4>
@@ -709,10 +767,10 @@ def main():
                         st.dataframe(value_counts)
             
             with tab3:
-                show_data_cleaning(df)
+                show_data_cleaning(current_df)
             
             with tab4:
-                show_visualizations(df)
+                show_visualizations(current_df)
                 
         except Exception as e:
             st.error(f"❌ Error loading file: {str(e)}")
